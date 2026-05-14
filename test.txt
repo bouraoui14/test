@@ -1,0 +1,329 @@
+public static Optional<Map<ExpiryTreeTableRow, Double>> showTradeDialog(List<TradeRow> trades) {
+
+    Dialog<Map<ExpiryTreeTableRow, Double>> dialog = new Dialog<>();
+
+    dialog.initModality(Modality.WINDOW_MODAL);
+    dialog.setTitle("Unwind Trade Price");
+
+    DialogPane dialogPane = dialog.getDialogPane();
+
+    dialogPane.getButtonTypes().addAll(ButtonType.OK, ButtonType.CANCEL);
+
+    // =========================
+    // TABLE
+    // =========================
+
+    TableView<TradeRow> table = new TableView<>();
+
+    table.setEditable(true);
+    table.setItems(FXCollections.observableArrayList(trades));
+
+    table.setColumnResizePolicy(TableView.CONSTRAINED_RESIZE_POLICY_ALL_COLUMNS);
+
+    table.getSelectionModel().setCellSelectionEnabled(true);
+
+    table.setFixedCellSize(34);
+
+    table.prefHeightProperty().bind(
+            Bindings.size(table.getItems())
+                    .multiply(table.getFixedCellSize())
+                    .add(40)
+    );
+
+    // =========================
+    // TRADE COLUMN
+    // =========================
+
+    TableColumn<TradeRow, String> descCol = new TableColumn<>("Trade");
+
+    descCol.setEditable(false);
+
+    descCol.setCellValueFactory(cell ->
+            cell.getValue().descriptionProperty());
+
+    descCol.setPrefWidth(450);
+
+    // =========================
+    // PRICE COLUMN
+    // =========================
+
+    TableColumn<TradeRow, Double> priceCol = new TableColumn<>("Price");
+
+    priceCol.setEditable(true);
+
+    priceCol.setCellValueFactory(cell ->
+            cell.getValue().priceProperty().asObject());
+
+    priceCol.setPrefWidth(150);
+
+    priceCol.setCellFactory(col -> new TextFieldTableCell<>(
+            new StringConverter<>() {
+
+                @Override
+                public String toString(Double value) {
+
+                    if (value == null || Double.isNaN(value)) {
+                        return "";
+                    }
+
+                    return String.format("%.2f", value);
+                }
+
+                @Override
+                public Double fromString(String text) {
+
+                    if (text == null || text.trim().isEmpty()) {
+                        return Double.NaN;
+                    }
+
+                    try {
+                        return Double.parseDouble(text.trim());
+                    }
+                    catch (Exception e) {
+                        return Double.NaN;
+                    }
+                }
+            }
+    ));
+
+    priceCol.setOnEditCommit(evt -> {
+
+        TradeRow row = evt.getRowValue();
+
+        Double value = evt.getNewValue();
+
+        if (value == null) {
+            value = Double.NaN;
+        }
+
+        row.setPrice(value);
+
+        table.refresh();
+    });
+
+    table.getColumns().addAll(descCol, priceCol);
+
+    // =========================
+    // HEADER
+    // =========================
+
+    Label title = new Label("Enter the unwind price for each trade");
+
+    title.setStyle("""
+            -fx-font-size: 15px;
+            -fx-font-weight: bold;
+            -fx-text-fill: #2c3e50;
+            """);
+
+    VBox container = new VBox(12, title, table);
+
+    container.setPadding(new Insets(18));
+
+    dialogPane.setContent(container);
+
+    dialogPane.setPrefWidth(760);
+
+    // =========================
+    // VALIDATION
+    // =========================
+
+    Node okButton = dialogPane.lookupButton(ButtonType.OK);
+
+    Observable[] observables = trades.stream()
+            .map(TradeRow::priceProperty)
+            .toArray(Observable[]::new);
+
+    BooleanBinding invalidBinding = Bindings.createBooleanBinding(
+            () -> trades.stream()
+                    .anyMatch(r -> Double.isNaN(r.getPrice())),
+            observables
+    );
+
+    okButton.disableProperty().bind(invalidBinding);
+
+    // =========================
+    // RESULT
+    // =========================
+
+    dialog.setResultConverter(btn -> {
+
+        if (btn == ButtonType.OK) {
+
+            return trades.stream()
+                    .collect(Collectors.toMap(
+                            TradeRow::getRow,
+                            TradeRow::getPrice
+                    ));
+        }
+
+        return null;
+    });
+
+    // =========================
+    // AUTO EDIT FIRST CELL
+    // =========================
+
+    Platform.runLater(() -> {
+
+        table.requestFocus();
+
+        if (!table.getItems().isEmpty()) {
+
+            table.getSelectionModel().select(0, priceCol);
+
+            table.edit(0, priceCol);
+        }
+    });
+
+    // =========================
+    // CSS
+    // =========================
+
+    dialogPane.getStylesheets().add(
+            "data:text/css," +
+
+            """
+            .dialog-pane {
+                -fx-background-color: #f7f9fc;
+            }
+
+            .label {
+                -fx-font-family: "Segoe UI";
+            }
+
+            .table-view {
+                -fx-background-color: white;
+                -fx-border-color: #d6dde8;
+                -fx-border-radius: 10;
+                -fx-background-radius: 10;
+                -fx-padding: 0;
+                -fx-background-insets: 0;
+            }
+
+            .table-view .column-header-background {
+                -fx-background-color: linear-gradient(to bottom, #f8fafc, #e9eef5);
+                -fx-background-radius: 10 10 0 0;
+                -fx-padding: 0 0 2 0;
+            }
+
+            .table-view .column-header {
+                -fx-background-color: transparent;
+                -fx-border-color: transparent #dfe6ee transparent transparent;
+                -fx-padding: 10 8 10 8;
+            }
+
+            .table-view .column-header:last-visible {
+                -fx-border-color: transparent;
+            }
+
+            .table-view .label {
+                -fx-font-size: 13px;
+                -fx-font-weight: bold;
+                -fx-text-fill: #34495e;
+            }
+
+            .table-row-cell {
+                -fx-background-color: white;
+                -fx-border-color: transparent;
+                -fx-padding: 0;
+                -fx-background-insets: 0;
+            }
+
+            .table-row-cell:odd {
+                -fx-background-color: #f8fbff;
+            }
+
+            .table-row-cell:hover {
+                -fx-background-color: #eaf3ff;
+            }
+
+            .table-row-cell:selected {
+                -fx-background-color: #d6e9ff;
+            }
+
+            .table-cell {
+                -fx-border-color: transparent #edf2f7 transparent transparent;
+                -fx-padding: 0 12 0 12;
+                -fx-font-size: 13px;
+                -fx-text-fill: #2d3436;
+                -fx-alignment: CENTER-LEFT;
+            }
+
+            .table-cell:last-visible {
+                -fx-border-color: transparent;
+            }
+
+            .table-row-cell:selected .table-cell {
+                -fx-text-fill: #1f2937;
+            }
+
+            .text-field-table-cell {
+                -fx-padding: 0;
+            }
+
+            .text-field-table-cell .text-field {
+                -fx-background-color: white;
+                -fx-border-color: #4a90e2;
+                -fx-border-radius: 6;
+                -fx-background-radius: 6;
+                -fx-padding: 6 8 6 8;
+                -fx-font-size: 13px;
+            }
+
+            .text-field-table-cell .text-field:focused {
+                -fx-border-color: #2f80ed;
+                -fx-effect: dropshadow(gaussian, rgba(47,128,237,0.2), 6, 0, 0, 0);
+            }
+
+            .button {
+                -fx-background-radius: 8;
+                -fx-font-size: 13px;
+                -fx-font-weight: bold;
+                -fx-padding: 8 18 8 18;
+                -fx-cursor: hand;
+            }
+
+            .button:default {
+                -fx-background-color: #2f80ed;
+                -fx-text-fill: white;
+            }
+
+            .button:default:hover {
+                -fx-background-color: #1f6fe0;
+            }
+
+            .button:default:pressed {
+                -fx-background-color: #195ec0;
+            }
+
+            .button:disabled {
+                -fx-opacity: 0.45;
+            }
+
+            .button:cancel {
+                -fx-background-color: #eef2f7;
+                -fx-text-fill: #34495e;
+            }
+
+            .button:cancel:hover {
+                -fx-background-color: #dde6f0;
+            }
+
+            .scroll-bar:vertical,
+            .scroll-bar:horizontal {
+                -fx-background-color: transparent;
+            }
+
+            .scroll-bar .thumb {
+                -fx-background-color: #c9d4e2;
+                -fx-background-radius: 10;
+            }
+
+            .scroll-bar .thumb:hover {
+                -fx-background-color: #aebed2;
+            }
+            """
+    );
+
+    return dialog.showAndWait();
+}
